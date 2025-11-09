@@ -66,10 +66,21 @@ typedef struct {
   Vector3 color;
 } Sphere;
 
-Sphere scene[10];
+#define SCENE_COUNT 10
+Sphere scene[SCENE_COUNT];
+
+Vector3 intersect_ray_sphere(Vector3 origin, Vector3 direction, Sphere sphere) {
+  float length = Vector3DotProduct(direction, direction);
+}
 
 Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   Vector3 result;
+
+  for (int i = 0; i < SCENE_COUNT; i++) {
+    Sphere sphere = scene[i];
+    intersect_ray_sphere(origin, direction, sphere);
+  }
+
   return result;
 }
 
@@ -118,8 +129,9 @@ int main(void) {
     for (int x = 0; x < IMAGE_WIDTH; x++) {
       float vx = x * (VIEWPORT_WIDTH / IMAGE_WIDTH);
       float vy = y * (VIEWPORT_HEIGHT / IMAGE_HEIGHT);
-      Vector3 direction = {vx, vy, VIEWPORT_DISTANCE};
-      Vector3 color = trace_ray(camera, direction, 1, FLT_MAX);
+      Vector3 viewport = {vx, vy, VIEWPORT_DISTANCE};
+      Vector3 color =
+          trace_ray(camera, Vector3Subtract(viewport, camera), 1, FLT_MAX);
       fprintf(file, "%i %i %i\n", (int)color.x, (int)color.y, (int)color.z);
     }
   }
