@@ -53,7 +53,6 @@ Vector3 Vector3Add(Vector3 v1, Vector3 v2) {
   };
 }
 
-/// Sum of squares
 float Vector3DotProduct(Vector3 v1, Vector3 v2) {
   return (v1.x * v2.x) + (v1.y * v2.y) + (v1.z * v2.z);
 };
@@ -70,7 +69,10 @@ typedef struct {
 Sphere scene[SCENE_COUNT];
 
 Vector3 intersect_ray_sphere(Vector3 origin, Vector3 direction, Sphere sphere) {
-  float length = Vector3DotProduct(direction, direction);
+  Vector3 co = Vector3Subtract(sphere.center, origin);
+  float a = Vector3DotProduct(direction, direction);
+  float b = Vector3DotProduct(direction, co) * 2;
+  float c = Vector3DotProduct(co, co) - (sphere.radius * sphere.radius);
 }
 
 Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
