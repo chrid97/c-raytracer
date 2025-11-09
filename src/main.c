@@ -18,6 +18,11 @@ typedef uint64_t u64;
 typedef struct {
   float x;
   float y;
+} Vector2;
+
+typedef struct {
+  float x;
+  float y;
   float z;
 } Vector3;
 
@@ -59,6 +64,11 @@ float Vector3DotProduct(Vector3 v1, Vector3 v2) {
 
 float Vector3Length(Vector3 v1) { return sqrtf(Vector3DotProduct(v1, v1)); }
 
+Vector3 Vector3Normalize(Vector3 v) {
+  float len = Vector3Length(v);
+  return (Vector3){v.x / len, v.y / len, v.z / len};
+}
+
 typedef struct {
   Vector3 center;
   float radius;
@@ -68,22 +78,50 @@ typedef struct {
 #define SCENE_COUNT 10
 Sphere scene[SCENE_COUNT];
 
-Vector3 intersect_ray_sphere(Vector3 origin, Vector3 direction, Sphere sphere) {
-  Vector3 co = Vector3Subtract(sphere.center, origin);
+Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
+                             Sphere *sphere) {
+  Vector3 co = Vector3Subtract(origin, sphere->center);
   float a = Vector3DotProduct(direction, direction);
   float b = Vector3DotProduct(direction, co) * 2;
-  float c = Vector3DotProduct(co, co) - (sphere.radius * sphere.radius);
+  float c = Vector3DotProduct(co, co) - (sphere->radius * sphere->radius);
+
+  float discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) {
+    return (Vector2){FLT_MAX, FLT_MAX};
+  }
+
+  float sqrt_disc = sqrtf(discriminant);
+  float t1 = (-b - sqrt_disc) / (2.0f * a);
+  float t2 = (-b + sqrt_disc) / (2.0f * a);
+
+  return (Vector2){t1, t2};
 }
 
 Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   Vector3 result;
+  float closest_t = t_max;
+  Sphere *closest_sphere = NULL;
 
   for (int i = 0; i < SCENE_COUNT; i++) {
-    Sphere sphere = scene[i];
-    intersect_ray_sphere(origin, direction, sphere);
+    Sphere *sphere = &scene[i];
+    Vector2 roots = intersect_ray_sphere(origin, direction, sphere);
+    float t1 = roots.x;
+    float t2 = roots.y;
+
+    if (t1 >= t_min && t1 <= t_max && t1 < closest_t) {
+      closest_t = t1;
+      closest_sphere = sphere;
+    }
+    if (t2 >= t_min && t2 <= t_max && t2 < closest_t) {
+      closest_t = t2;
+      closest_sphere = sphere;
+    }
+  }
+  if (closest_sphere == NULL) {
+    return (Vector3){255, 255, 255};
   }
 
-  return result;
+  return closest_sphere->color;
 }
 
 int main(void) {
@@ -120,20 +158,22 @@ int main(void) {
   // float length = Vector3DotProduct(intersection_point, intersection_point);
 
   scene[0] = (Sphere){
-      .center = (Vector3){0, -1, 3}, .radius = 5, .color = {255, 0, 0}};
+      .center = (Vector3){0, -1, 3}, .radius = 1, .color = {255, 0, 0}};
   scene[1] =
-      (Sphere){.center = (Vector3){2, 0, 4}, .radius = 5, .color = {0, 255, 0}};
+      (Sphere){.center = (Vector3){2, 0, 4}, .radius = 1, .color = {0, 255, 0}};
   scene[2] = (Sphere){
-      .center = (Vector3){-2, 0, 4}, .radius = 5, .color = {0, 0, 255}};
+      .center = (Vector3){-2, 0, 4}, .radius = 1, .color = {0, 0, 255}};
 
   fprintf(file, "P3\n%i %i\n 255\n", IMAGE_WIDTH, IMAGE_HEIGHT);
   for (int y = 0; y < IMAGE_HEIGHT; y++) {
     for (int x = 0; x < IMAGE_WIDTH; x++) {
-      float vx = x * (VIEWPORT_WIDTH / IMAGE_WIDTH);
-      float vy = y * (VIEWPORT_HEIGHT / IMAGE_HEIGHT);
-      Vector3 viewport = {vx, vy, VIEWPORT_DISTANCE};
-      Vector3 color =
-          trace_ray(camera, Vector3Subtract(viewport, camera), 1, FLT_MAX);
+      float vx = (x - IMAGE_WIDTH / 2.0f) * (VIEWPORT_WIDTH / IMAGE_WIDTH);
+      float vy = -(y - IMAGE_HEIGHT / 2.0f) * (VIEWPORT_HEIGHT / IMAGE_HEIGHT);
+      Vector3 viewport_point =
+          Vector3Normalize((Vector3){vx, vy, VIEWPORT_DISTANCE});
+
+      Vector3 color = trace_ray(camera, Vector3Subtract(viewport_point, camera),
+                                1, FLT_MAX);
       fprintf(file, "%i %i %i\n", (int)color.x, (int)color.y, (int)color.z);
     }
   }
