@@ -69,14 +69,47 @@ Vector3 Vector3Normalize(Vector3 v) {
   return (Vector3){v.x / len, v.y / len, v.z / len};
 }
 
+typedef enum {
+  LIGHT_TYPE_POINT,
+  LIGHT_TYPE_DIRECTIONAL,
+  LIGHT_TYPE_AMBIENT
+} Light_Type;
+
+typedef struct {
+  Light_Type type;
+  float intensity;
+  union {
+    Vector3 position;  // For point light
+    Vector3 direction; // For directional light
+    // ambient doesn't use either
+  };
+} Light;
+
 typedef struct {
   Vector3 center;
   float radius;
   Vector3 color;
 } Sphere;
 
-#define SCENE_COUNT 10
-Sphere scene[SCENE_COUNT];
+#define SPHERE_COUNT 10
+Sphere spheres[SPHERE_COUNT];
+
+#define LIGHT_COUNT 10
+Light lights[LIGHT_COUNT];
+
+Light create_point_light(float intensity, Vector3 position) {
+  return (Light){
+      .type = LIGHT_TYPE_POINT, .intensity = intensity, .position = position};
+}
+
+Light create_directional_light(float intensity, Vector3 direction) {
+  return (Light){
+      .type = LIGHT_TYPE_POINT, .intensity = intensity, .direction = direction};
+}
+
+Light create_ambient_light(float intensity) {
+  return (Light){.type = LIGHT_TYPE_POINT, .intensity = intensity};
+}
 
 Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
                              Sphere *sphere) {
@@ -102,8 +135,8 @@ Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   float closest_t = t_max;
   Sphere *closest_sphere = NULL;
 
-  for (int i = 0; i < SCENE_COUNT; i++) {
-    Sphere *sphere = &scene[i];
+  for (int i = 0; i < SPHERE_COUNT; i++) {
+    Sphere *sphere = &spheres[i];
     Vector2 roots = intersect_ray_sphere(origin, direction, sphere);
     float t1 = roots.x;
     float t2 = roots.y;
@@ -124,6 +157,8 @@ Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   return closest_sphere->color;
 }
 
+float compute_lighting(Vector3 point, Vector3 normal) {}
+
 int main(void) {
   FILE *file = fopen("image.ppm", "w");
   if (!file) {
@@ -135,34 +170,24 @@ int main(void) {
   const float VIEWPORT_HEIGHT = 1.0f;
   const float VIEWPORT_DISTANCE = 1.0f;
 
-  const u16 IMAGE_HEIGHT = 256;
-  const u16 IMAGE_WIDTH = 256;
-
+  const u16 IMAGE_HEIGHT = 256 * 10;
+  const u16 IMAGE_WIDTH = 256 * 10;
   Vector3 camera = {0, 0, 0};
 
   float vx = 1 * (VIEWPORT_WIDTH / IMAGE_WIDTH);
   float vy = 1 * (VIEWPORT_HEIGHT / IMAGE_HEIGHT);
   Vector3 viewport = {vx, vy, VIEWPORT_DISTANCE};
 
-  // Find the distance from the camera to the viewport
-  // Vector3 ray = Vector3Subtract(viewport, camera);
-  // // Find where we are on the ray based on t time
-  // float time = 1;
-  // ray = Vector3Scale(ray, time);
-  // // Offset the ray by the origin, in our case the camera
-  // ray = Vector3Add(camera, ray);
-  //
-  // // Where is the ray relative to our sphere origin
-  // Vector3 intersection_point = Vector3Subtract(ray, sphere.center);
-  // // Find the length of new Vector3
-  // float length = Vector3DotProduct(intersection_point, intersection_point);
-
-  scene[0] = (Sphere){
+  spheres[0] = (Sphere){
       .center = (Vector3){0, -1, 3}, .radius = 1, .color = {255, 0, 0}};
-  scene[1] =
+  spheres[1] =
       (Sphere){.center = (Vector3){2, 0, 4}, .radius = 1, .color = {0, 255, 0}};
-  scene[2] = (Sphere){
+  spheres[2] = (Sphere){
       .center = (Vector3){-2, 0, 4}, .radius = 1, .color = {0, 0, 255}};
+
+  lights[0] = create_ambient_light(0.2);
+  lights[1] = create_point_light(0.6, (Vector3){2, 1, 0});
+  lights[2] = create_directional_light(0.2, (Vector3){1, 4, 4});
 
   fprintf(file, "P3\n%i %i\n 255\n", IMAGE_WIDTH, IMAGE_HEIGHT);
   for (int y = 0; y < IMAGE_HEIGHT; y++) {
