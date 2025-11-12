@@ -103,12 +103,13 @@ Light create_point_light(float intensity, Vector3 position) {
 }
 
 Light create_directional_light(float intensity, Vector3 direction) {
-  return (Light){
-      .type = LIGHT_TYPE_POINT, .intensity = intensity, .direction = direction};
+  return (Light){.type = LIGHT_TYPE_DIRECTIONAL,
+                 .intensity = intensity,
+                 .direction = direction};
 }
 
 Light create_ambient_light(float intensity) {
-  return (Light){.type = LIGHT_TYPE_POINT, .intensity = intensity};
+  return (Light){.type = LIGHT_TYPE_AMBIENT, .intensity = intensity};
 }
 
 Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
@@ -133,11 +134,12 @@ Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
 float compute_lighting(Vector3 point, Vector3 normal) {
   float i = 0.0f;
 
-  for (int i = 0; i < LIGHT_COUNT; i++) {
-    Light *light = &lights[i];
+  for (int j = 0; j < LIGHT_COUNT; j++) {
+    Light *light = &lights[j];
     switch (light->type) {
     case LIGHT_TYPE_AMBIENT: {
       i += light->intensity;
+      printf("%f\n", i);
     } break;
 
     case LIGHT_TYPE_DIRECTIONAL: {
