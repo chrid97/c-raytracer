@@ -130,6 +130,41 @@ Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
   return (Vector2){t1, t2};
 }
 
+float compute_lighting(Vector3 point, Vector3 normal) {
+  float i = 0.0f;
+
+  for (int i = 0; i < LIGHT_COUNT; i++) {
+    Light *light = &lights[i];
+    switch (light->type) {
+    case LIGHT_TYPE_AMBIENT: {
+      i += light->intensity;
+    } break;
+
+    case LIGHT_TYPE_DIRECTIONAL: {
+      i += light->intensity;
+      float n_dot_l = Vector3DotProduct(normal, light->direction);
+
+      if (n_dot_l > 0) {
+        i += light->intensity * n_dot_l /
+             (Vector3Length(normal) * Vector3Length(light->direction));
+      }
+    } break;
+
+    case LIGHT_TYPE_POINT: {
+      Vector3 L = Vector3Subtract(light->position, point);
+      float n_dot_l = Vector3DotProduct(normal, L);
+
+      if (n_dot_l > 0) {
+        i += light->intensity * n_dot_l /
+             (Vector3Length(normal) * Vector3Length(L));
+      }
+    } break;
+    }
+  }
+
+  return i;
+}
+
 Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   Vector3 result;
   float closest_t = t_max;
@@ -154,10 +189,12 @@ Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
     return (Vector3){255, 255, 255};
   }
 
-  return closest_sphere->color;
+  Vector3 P = Vector3Scale(direction, closest_t);
+  P = Vector3Add(P, origin);
+  Vector3 N = Vector3Subtract(P, closest_sphere->center);
+  N = Vector3Normalize(N);
+  return Vector3Scale(closest_sphere->color, compute_lighting(P, N));
 }
-
-float compute_lighting(Vector3 point, Vector3 normal) {}
 
 int main(void) {
   FILE *file = fopen("image.ppm", "w");
@@ -170,8 +207,8 @@ int main(void) {
   const float VIEWPORT_HEIGHT = 1.0f;
   const float VIEWPORT_DISTANCE = 1.0f;
 
-  const u16 IMAGE_HEIGHT = 256 * 10;
-  const u16 IMAGE_WIDTH = 256 * 10;
+  const u16 IMAGE_HEIGHT = 256;
+  const u16 IMAGE_WIDTH = 256;
   Vector3 camera = {0, 0, 0};
 
   float vx = 1 * (VIEWPORT_WIDTH / IMAGE_WIDTH);

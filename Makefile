@@ -1,0 +1,2 @@
+watch:
+	@bash ./run.sh
