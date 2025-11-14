@@ -69,6 +69,8 @@ Vector3 Vector3Normalize(Vector3 v) {
   return (Vector3){v.x / len, v.y / len, v.z / len};
 }
 
+Vector3 Vector3Negate(Vector3 v) { return (Vector3){-v.x, -v.y, -v.z}; }
+
 typedef enum {
   LIGHT_TYPE_POINT,
   LIGHT_TYPE_DIRECTIONAL,
@@ -132,40 +134,48 @@ Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
   return (Vector2){t1, t2};
 }
 
-float compute_lighting(Vector3 point, Vector3 normal) {
-  float i = 0.0f;
+float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
+                       float specular) {
+  float intensity = 0.0f;
 
   for (int j = 0; j < LIGHT_COUNT; j++) {
     Light *light = &lights[j];
-    switch (light->type) {
-    case LIGHT_TYPE_AMBIENT: {
-      i += light->intensity;
-      printf("%f\n", i);
-    } break;
 
-    case LIGHT_TYPE_DIRECTIONAL: {
-      i += light->intensity;
-      float n_dot_l = Vector3DotProduct(normal, light->direction);
+    if (light->type == LIGHT_TYPE_AMBIENT) {
+      intensity += light->intensity;
+      continue;
+    }
 
-      if (n_dot_l > 0) {
-        i += light->intensity * n_dot_l /
-             (Vector3Length(normal) * Vector3Length(light->direction));
+    Vector3 L;
+    if (light->type == LIGHT_TYPE_POINT) {
+      L = Vector3Normalize(Vector3Subtract(light->position, point));
+    } else {
+      L = Vector3Normalize(light->direction);
+    }
+
+    // Diffuse
+    float n_dot_l = Vector3DotProduct(normal, L);
+    if (n_dot_l > 0) {
+      intensity += light->intensity * n_dot_l /
+                   (Vector3Length(normal) * Vector3Length(L));
+    }
+
+    if (specular > 0) {
+      Vector3 R = Vector3Subtract(
+          Vector3Scale(normal, 2.0f * Vector3DotProduct(normal, L)), L);
+      float r_dot_v = Vector3DotProduct(R, view);
+      if (r_dot_v > 0) {
+        float angle_between_r_v =
+            r_dot_v / (Vector3Length(R) * Vector3Length(view));
+        intensity += light->intensity * powf(angle_between_r_v, specular);
       }
-    } break;
-
-    case LIGHT_TYPE_POINT: {
-      Vector3 L = Vector3Subtract(light->position, point);
-      float n_dot_l = Vector3DotProduct(normal, L);
-
-      if (n_dot_l > 0) {
-        i += light->intensity * n_dot_l /
-             (Vector3Length(normal) * Vector3Length(L));
-      }
-    } break;
     }
   }
+  if (intensity > 1.0f) {
+    intensity = 1.0f;
+  }
 
-  return i;
+  return intensity;
 }
 
 Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
@@ -196,7 +206,9 @@ Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   P = Vector3Add(P, origin);
   Vector3 N = Vector3Subtract(P, closest_sphere->center);
   N = Vector3Normalize(N);
-  return Vector3Scale(closest_sphere->color, compute_lighting(P, N));
+  return Vector3Scale(closest_sphere->color,
+                      compute_lighting(P, N, Vector3Negate(direction),
+                                       closest_sphere->specular));
 }
 
 int main(void) {
@@ -218,14 +230,22 @@ int main(void) {
   float vy = 1 * (VIEWPORT_HEIGHT / IMAGE_HEIGHT);
   Vector3 viewport = {vx, vy, VIEWPORT_DISTANCE};
 
-  spheres[0] = (Sphere){
-      .center = (Vector3){0, -1, 3}, .radius = 1, .color = {255, 0, 0}};
-  spheres[1] =
-      (Sphere){.center = (Vector3){2, 0, 4}, .radius = 1, .color = {0, 255, 0}};
-  spheres[2] = (Sphere){
-      .center = (Vector3){-2, 0, 4}, .radius = 1, .color = {0, 0, 255}};
-  spheres[3] = (Sphere){
-      .center = (Vector3){0, -5001, 0}, .radius = 5000, .color = {255, 255, 0}};
+  spheres[0] = (Sphere){.center = (Vector3){0, -1, 3},
+                        .radius = 1,
+                        .color = {255, 0, 0},
+                        .specular = 500};
+  spheres[1] = (Sphere){.center = (Vector3){2, 0, 4},
+                        .radius = 1,
+                        .color = {0, 255, 0},
+                        .specular = 500};
+  spheres[2] = (Sphere){.center = (Vector3){-2, 0, 4},
+                        .radius = 1,
+                        .color = {0, 0, 255},
+                        .specular = 10};
+  spheres[3] = (Sphere){.center = (Vector3){0, -5001, 0},
+                        .radius = 5000,
+                        .color = {255, 255, 0},
+                        .specular = 1000};
 
   lights[0] = create_ambient_light(0.2);
   lights[1] = create_point_light(0.6, (Vector3){2, 1, 0});
