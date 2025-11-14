@@ -89,6 +89,7 @@ typedef struct {
   Vector3 center;
   float radius;
   Vector3 color;
+  float specular;
 } Sphere;
 
 #define SPHERE_COUNT 10
@@ -209,8 +210,8 @@ int main(void) {
   const float VIEWPORT_HEIGHT = 1.0f;
   const float VIEWPORT_DISTANCE = 1.0f;
 
-  const u16 IMAGE_HEIGHT = 256;
-  const u16 IMAGE_WIDTH = 256;
+  const u16 IMAGE_HEIGHT = 256 * 10;
+  const u16 IMAGE_WIDTH = 256 * 10;
   Vector3 camera = {0, 0, 0};
 
   float vx = 1 * (VIEWPORT_WIDTH / IMAGE_WIDTH);
@@ -223,6 +224,8 @@ int main(void) {
       (Sphere){.center = (Vector3){2, 0, 4}, .radius = 1, .color = {0, 255, 0}};
   spheres[2] = (Sphere){
       .center = (Vector3){-2, 0, 4}, .radius = 1, .color = {0, 0, 255}};
+  spheres[3] = (Sphere){
+      .center = (Vector3){0, -5001, 0}, .radius = 5000, .color = {255, 255, 0}};
 
   lights[0] = create_ambient_light(0.2);
   lights[1] = create_point_light(0.6, (Vector3){2, 1, 0});
