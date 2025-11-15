@@ -134,6 +134,35 @@ Vector2 intersect_ray_sphere(Vector3 origin, Vector3 direction,
   return (Vector2){t1, t2};
 }
 
+typedef struct {
+  Sphere *closest_sphere;
+  float closest_t;
+} ClosestIntersection;
+ClosestIntersection closest_intersection(Vector3 origin, Vector3 direction,
+                                         float t_min, float t_max) {
+  float closest_t = t_max;
+  Sphere *closest_sphere = NULL;
+
+  for (int i = 0; i < SPHERE_COUNT; i++) {
+    Sphere *sphere = &spheres[i];
+    Vector2 roots = intersect_ray_sphere(origin, direction, sphere);
+    float t1 = roots.x;
+    float t2 = roots.y;
+
+    if (t1 >= t_min && t1 <= t_max && t1 < closest_t) {
+      closest_t = t1;
+      closest_sphere = sphere;
+    }
+    if (t2 >= t_min && t2 <= t_max && t2 < closest_t) {
+      closest_t = t2;
+      closest_sphere = sphere;
+    }
+  }
+
+  return (ClosestIntersection){.closest_sphere = closest_sphere,
+                               .closest_t = closest_t};
+}
+
 float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
                        float specular) {
   float intensity = 0.0f;
@@ -147,10 +176,20 @@ float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
     }
 
     Vector3 L;
+    float t_max;
     if (light->type == LIGHT_TYPE_POINT) {
       L = Vector3Normalize(Vector3Subtract(light->position, point));
+      t_max = 1;
     } else {
       L = Vector3Normalize(light->direction);
+      t_max = FLT_MAX;
+    }
+
+    // Shadow Check
+    ClosestIntersection intersection =
+        closest_intersection(point, L, 0.001, t_max);
+    if (intersection.closest_sphere != NULL) {
+      continue;
     }
 
     // Diffuse
@@ -180,24 +219,12 @@ float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
 
 Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
   Vector3 result;
-  float closest_t = t_max;
-  Sphere *closest_sphere = NULL;
 
-  for (int i = 0; i < SPHERE_COUNT; i++) {
-    Sphere *sphere = &spheres[i];
-    Vector2 roots = intersect_ray_sphere(origin, direction, sphere);
-    float t1 = roots.x;
-    float t2 = roots.y;
+  ClosestIntersection intersection =
+      closest_intersection(origin, direction, t_min, t_max);
+  Sphere *closest_sphere = intersection.closest_sphere;
+  float closest_t = intersection.closest_t;
 
-    if (t1 >= t_min && t1 <= t_max && t1 < closest_t) {
-      closest_t = t1;
-      closest_sphere = sphere;
-    }
-    if (t2 >= t_min && t2 <= t_max && t2 < closest_t) {
-      closest_t = t2;
-      closest_sphere = sphere;
-    }
-  }
   if (closest_sphere == NULL) {
     return (Vector3){255, 255, 255};
   }
