@@ -92,6 +92,7 @@ typedef struct {
   float radius;
   Vector3 color;
   float specular;
+  float reflective;
 } Sphere;
 
 #define SPHERE_COUNT 10
@@ -163,13 +164,17 @@ ClosestIntersection closest_intersection(Vector3 origin, Vector3 direction,
                                .closest_t = closest_t};
 }
 
+Vector3 reflect_ray(Vector3 ray, Vector3 normal) {
+  return Vector3Subtract(
+      ray, Vector3Scale(normal, Vector3DotProduct(ray, normal) * 2));
+}
+
 float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
                        float specular) {
   float intensity = 0.0f;
 
   for (int j = 0; j < LIGHT_COUNT; j++) {
     Light *light = &lights[j];
-
     if (light->type == LIGHT_TYPE_AMBIENT) {
       intensity += light->intensity;
       continue;
@@ -178,10 +183,10 @@ float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
     Vector3 L;
     float t_max;
     if (light->type == LIGHT_TYPE_POINT) {
-      L = Vector3Normalize(Vector3Subtract(light->position, point));
+      L = Vector3Subtract(light->position, point);
       t_max = 1;
     } else {
-      L = Vector3Normalize(light->direction);
+      L = light->direction;
       t_max = FLT_MAX;
     }
 
@@ -199,7 +204,7 @@ float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
                    (Vector3Length(normal) * Vector3Length(L));
     }
 
-    if (specular > 0) {
+    if (specular != 1) {
       Vector3 R = Vector3Subtract(
           Vector3Scale(normal, 2.0f * Vector3DotProduct(normal, L)), L);
       float r_dot_v = Vector3DotProduct(R, view);
@@ -217,9 +222,8 @@ float compute_lighting(Vector3 point, Vector3 normal, Vector3 view,
   return intensity;
 }
 
-Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
-  Vector3 result;
-
+Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max,
+                  int recursion_depth) {
   ClosestIntersection intersection =
       closest_intersection(origin, direction, t_min, t_max);
   Sphere *closest_sphere = intersection.closest_sphere;
@@ -229,13 +233,24 @@ Vector3 trace_ray(Vector3 origin, Vector3 direction, float t_min, float t_max) {
     return (Vector3){255, 255, 255};
   }
 
-  Vector3 P = Vector3Scale(direction, closest_t);
-  P = Vector3Add(P, origin);
+  Vector3 P = Vector3Add(Vector3Scale(direction, closest_t), origin);
   Vector3 N = Vector3Subtract(P, closest_sphere->center);
   N = Vector3Normalize(N);
-  return Vector3Scale(closest_sphere->color,
-                      compute_lighting(P, N, Vector3Negate(direction),
-                                       closest_sphere->specular));
+  Vector3 local_color = Vector3Scale(
+      closest_sphere->color, compute_lighting(P, N, Vector3Negate(direction),
+                                              closest_sphere->specular));
+
+  float r = closest_sphere->reflective;
+  if (recursion_depth <= 0 || r <= 0) {
+    return local_color;
+  }
+
+  Vector3 R = reflect_ray(Vector3Negate(direction), N);
+  Vector3 reflected_color =
+      trace_ray(P, R, 0.001f, FLT_MAX, recursion_depth - 1);
+
+  return Vector3Add(Vector3Scale(local_color, 1 - r),
+                    Vector3Scale(reflected_color, r));
 }
 
 int main(void) {
@@ -260,23 +275,27 @@ int main(void) {
   spheres[0] = (Sphere){.center = (Vector3){0, -1, 3},
                         .radius = 1,
                         .color = {255, 0, 0},
-                        .specular = 500};
-  spheres[1] = (Sphere){.center = (Vector3){2, 0, 4},
-                        .radius = 1,
-                        .color = {0, 255, 0},
-                        .specular = 500};
-  spheres[2] = (Sphere){.center = (Vector3){-2, 0, 4},
+                        .specular = 500,
+                        .reflective = 0.2};
+  spheres[1] = (Sphere){.center = (Vector3){-2, 0, 4},
                         .radius = 1,
                         .color = {0, 0, 255},
-                        .specular = 10};
+                        .specular = 500,
+                        .reflective = 0.3};
+  spheres[2] = (Sphere){.center = (Vector3){2, 0, 4},
+                        .radius = 1,
+                        .color = {0, 255, 0},
+                        .specular = 10,
+                        .reflective = 0.4};
   spheres[3] = (Sphere){.center = (Vector3){0, -5001, 0},
                         .radius = 5000,
                         .color = {255, 255, 0},
-                        .specular = 1000};
+                        .specular = 1000,
+                        .reflective = 0.5};
 
   lights[0] = create_ambient_light(0.2);
   lights[1] = create_point_light(0.6, (Vector3){2, 1, 0});
-  lights[2] = create_directional_light(0.2, (Vector3){1, 4, 4});
+  lights[2] = create_directional_light(0.2, (Vector3){-1, -4, -4});
 
   fprintf(file, "P3\n%i %i\n 255\n", IMAGE_WIDTH, IMAGE_HEIGHT);
   for (int y = 0; y < IMAGE_HEIGHT; y++) {
@@ -287,7 +306,7 @@ int main(void) {
           Vector3Normalize((Vector3){vx, vy, VIEWPORT_DISTANCE});
 
       Vector3 color = trace_ray(camera, Vector3Subtract(viewport_point, camera),
-                                1, FLT_MAX);
+                                1, FLT_MAX, 1);
       fprintf(file, "%i %i %i\n", (int)color.x, (int)color.y, (int)color.z);
     }
   }
